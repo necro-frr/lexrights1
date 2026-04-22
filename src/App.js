@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import lawsData from "./laws.json";
 
-const apiKey = grok_api_key;
+const apiKey = process.env.REACT_APP_GROK_API_KEY;
 
 function extractKeywords(text) {
   const stopWords = new Set([
