@@ -43,32 +43,44 @@ function buildPrompt(query, matchedLaws) {
       ).join("\n")}`
     : "No specific laws found in database. Use your knowledge of Indian law.";
 
-  return `You are an Indian legal rights reference tool. A corporate professional has described a situation.
+  return `You are an Indian legal rights reference tool for corporate professionals.
 
 ${lawsContext}
 
 User situation: "${query}"
 
-Based on the above, respond STRICTLY as valid JSON only (no markdown, no extra text):
+Analyze this situation carefully and respond STRICTLY as valid JSON only (no markdown, no extra text).
+Make your response SPECIFIC to this exact situation — do not give generic answers.
+
 {
   "constitutional_rights": [
     {
-      "name": "Name of the constitutional right",
-      "reference": "Article number from Indian Constitution",
-      "what_it_means": "One simple sentence explaining this right in plain English",
-      "why_relevant": "One sentence explaining why it applies to this situation"
+      "name": "Specific name of the constitutional right",
+      "reference": "Exact Article number from Indian Constitution",
+      "what_it_means": "Write 2-3 sentences explaining this right in very simple plain English. Explain it like you are talking to a non-lawyer.",
+      "why_relevant": "Write 3-5 bullet points (use • symbol) explaining specifically how this right applies to THIS situation. Be very specific to the user's query, not generic.",
+      "what_can_be_done": "Write 2-3 bullet points (use • symbol) on what the person can practically do using this right."
     }
   ],
   "laws_and_statutes": [
     {
-      "name": "Name of the law",
-      "reference": "Act name and section number",
-      "what_it_means": "One simple sentence explaining this law in plain English",
-      "why_relevant": "One sentence explaining why it applies to this situation"
+      "name": "Specific name of the law or act",
+      "reference": "Exact Act name and Section number",
+      "what_it_means": "Write 2-3 sentences explaining this law in very simple plain English. Avoid legal jargon completely.",
+      "why_relevant": "Write 3-5 bullet points (use • symbol) explaining specifically how this law applies to THIS situation. Be very specific, not generic.",
+      "what_can_be_done": "Write 2-3 bullet points (use • symbol) on what the person can practically do under this law.",
+      "penalty": "One sentence on what penalty the other party faces if they violate this law."
     }
   ],
-  "disclaimer": "This information is for reference only and does not constitute legal advice. Please consult a qualified lawyer."
-}`;
+  "disclaimer": "This information is for reference only and does not constitute legal advice. Please consult a qualified lawyer for your specific situation."
+}
+
+IMPORTANT RULES:
+- Be SPECIFIC to this exact situation — no generic responses
+- Use • bullet points inside the why_relevant and what_can_be_done fields
+- Write in simple plain English — no legal jargon
+- Each law must directly relate to what the user described
+- Do not repeat the same point across different laws`;
 }
 
 function getKanoonSearchUrl(reference) {
@@ -119,13 +131,21 @@ export default function App() {
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "user", content: prompt }],
           temperature: 0.3,
+          response_format: { type: "json_object" },
         }),
       });
 
       const data = await res.json();
       const text = data.choices?.[0]?.message?.content || "";
       const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
+      let parsed;
+try {
+  parsed = JSON.parse(clean);
+} catch (e) {
+  console.log("RAW RESPONSE:", text);
+  setError("Invalid response from API");
+  return;
+}
       setResult(parsed);
       setActiveTab(parsed.constitutional_rights?.length > 0 ? "constitutional" : "laws");
     } catch (err) {
@@ -520,19 +540,70 @@ export default function App() {
             </div>
             <div className="cards">
               {activeTab === "constitutional" && result.constitutional_rights?.map((item, i) => (
-                <div className="card" key={i} style={{ animationDelay: `${i * 0.07}s` }}>
-                  <div className="card-top"><div className="card-name">{item.name}</div><a href={getKanoonSearchUrl(item.reference)} target="_blank" rel="noopener noreferrer" className="ref-tag">{item.reference}</a></div>
-                  <div className="plain-block"><div className="plain-label">What this means</div><div className="plain-text">{item.what_it_means}</div></div>
-                  <div className="why-block"><div className="plain-label">Why it applies here</div><div className="why-text">{item.why_relevant}</div></div>
-                </div>
-              ))}
-              {activeTab === "laws" && result.laws_and_statutes?.map((item, i) => (
-                <div className="card" key={i} style={{ animationDelay: `${i * 0.07}s` }}>
-                  <div className="card-top"><div className="card-name">{item.name}</div><a href={getKanoonSearchUrl(item.reference)} target="_blank" rel="noopener noreferrer" className="ref-tag">{item.reference}</a></div>
-                  <div className="plain-block"><div className="plain-label">What this means</div><div className="plain-text">{item.what_it_means}</div></div>
-                  <div className="why-block"><div className="plain-label">Why it applies here</div><div className="why-text">{item.why_relevant}</div></div>
-                </div>
-              ))}
+  <div className="card" key={i} style={{ animationDelay: `${i * 0.07}s` }}>
+    <div className="card-top">
+      <div className="card-name">{item.name}</div>
+      <a
+  className="ref-tag"
+  href={getKanoonSearchUrl(item.reference || item.name)}
+  target="_blank"
+  rel="noreferrer"
+>
+  {item.reference || "View Law"}
+</a>
+    </div>
+    <div className="plain-block">
+      <div className="plain-label">What this means</div>
+      <div className="plain-text">{item.what_it_means}</div>
+    </div>
+    <div className="why-block">
+      <div className="plain-label">Why it applies here</div>
+      <div className="why-text" style={{whiteSpace:"pre-line"}}>{item.why_relevant}</div>
+    </div>
+    {item.what_can_be_done && (
+      <div className="why-block" style={{marginTop:10, borderLeft:"2px solid #2d8a3e"}}>
+        <div className="plain-label">What you can do</div>
+        <div className="why-text" style={{whiteSpace:"pre-line"}}>{item.what_can_be_done}</div>
+      </div>
+    )}
+  </div>
+))}
+
+{activeTab === "laws" && result.laws_and_statutes?.map((item, i) => (
+  <div className="card" key={i} style={{ animationDelay: `${i * 0.07}s` }}>
+    <div className="card-top">
+      <div className="card-name">{item.name}</div>
+      <a
+  className="ref-tag"
+  href={getKanoonSearchUrl(item.reference || item.name)}
+  target="_blank"
+  rel="noreferrer"
+>
+  {item.reference || "View Law"}
+</a>
+    </div>
+    <div className="plain-block">
+      <div className="plain-label">What this means</div>
+      <div className="plain-text">{item.what_it_means}</div>
+    </div>
+    <div className="why-block">
+      <div className="plain-label">Why it applies here</div>
+      <div className="why-text" style={{whiteSpace:"pre-line"}}>{item.why_relevant}</div>
+    </div>
+    {item.what_can_be_done && (
+      <div className="why-block" style={{marginTop:10, borderLeft:"2px solid #2d8a3e"}}>
+        <div className="plain-label">What you can do</div>
+        <div className="why-text" style={{whiteSpace:"pre-line"}}>{item.what_can_be_done}</div>
+      </div>
+    )}
+    {item.penalty && (
+      <div style={{marginTop:10, background:"rgba(180,60,60,0.06)", borderRadius:6, padding:"8px 12px"}}>
+        <div className="plain-label">⚠ Penalty for violation</div>
+        <div className="why-text">{item.penalty}</div>
+      </div>
+    )}
+  </div>
+))}
             </div>
             <div className="disclaimer">⚠️ <strong>Disclaimer:</strong> {result.disclaimer}</div>
           </div>
@@ -541,3 +612,4 @@ export default function App() {
     </>
   );
 }
+
